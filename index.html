@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Fruit Market Survival</title>
+<style>
+  :root {
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #666;
+    --color-text-tertiary: #999;
+    --color-background-primary: #fff;
+    --color-background-secondary: #f4f4f2;
+    --color-border-tertiary: #e0e0dc;
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+  }
+  body { font-family: var(--font-sans); max-width: 900px; margin: 0 auto; padding: 1rem; background: #fafaf8; }
+  button { padding: 6px 12px; border-radius: 6px; border: 0.5px solid var(--color-border-tertiary); background: #fff; cursor: pointer; font-size: 13px; }
+  button:hover { background: #f0f0ee; }
+  input, select { padding: 4px 8px; border-radius: 4px; border: 0.5px solid var(--color-border-tertiary); font-size: 13px; }
+  .game-root { font-family: var(--font-sans); color: var(--color-text-primary); padding: 1rem 0; }
+  .hud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 1rem; }
+  .stat { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px 14px; }
+  .stat-label { font-size: 12px; color: var(--color-text-secondary); margin: 0 0 4px; }
+  .stat-value { font-size: 22px; font-weight: 500; margin: 0; }
+  .panel { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  .panel h3 { margin: 0 0 12px; font-size: 16px; font-weight: 500; }
+  .players { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+  .p-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; font-size: 13px; border-left: 3px solid var(--color-border-tertiary); }
+  .p-card.you { border-left-color: #185FA5; background: #E6F1FB; color: #0C447C; }
+  .p-card.dead { opacity: 0.45; text-decoration: line-through; }
+  .p-card .pname { font-weight: 500; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .p-card .prow { display: flex; justify-content: space-between; font-size: 12px; color: var(--color-text-secondary); }
+  .p-card.you .prow { color: #185FA5; }
+  .p-card .runway { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+  .p-card.you .runway { color: #185FA5; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .trade-box { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px; }
+  .trade-box h4 { margin: 0 0 10px; font-size: 14px; font-weight: 500; }
+  .field { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+  .field label { min-width: 60px; color: var(--color-text-secondary); }
+  .field input, .field select { flex: 1; }
+  .btn-row { display: flex; gap: 8px; margin-top: 1rem; flex-wrap: wrap; }
+  .log { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; font-size: 12px; max-height: 140px; overflow-y: auto; font-family: var(--font-mono); }
+  .log div { margin-bottom: 3px; }
+  .log .buy { color: #0F6E56; }
+  .log .sell { color: #993C1D; }
+  .log .die { color: #A32D2D; }
+  .log .tick { color: var(--color-text-tertiary); }
+  .cooldown { font-size: 11px; color: var(--color-text-tertiary); margin-top: 4px; }
+  .game-over { text-align: center; padding: 2rem; background: #E6F1FB; border-radius: var(--border-radius-lg); color: #0C447C; }
+  .game-over h2 { margin: 0 0 8px; font-size: 22px; font-weight: 500; }
+  .you-badge { background: #185FA5; color: white; font-size: 10px; padding: 1px 6px; border-radius: 8px; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<div class="game-root">
+  <div class="hud">
+    <div class="stat"><p class="stat-label">Time survived</p><p class="stat-value" id="time">0s</p></div>
+    <div class="stat"><p class="stat-label">Alive</p><p class="stat-value" id="alive">10 / 10</p></div>
+    <div class="stat"><p class="stat-label">Apple · last</p><p class="stat-value" id="p-apple">—</p></div>
+    <div class="stat"><p class="stat-label">Orange · last</p><p class="stat-value" id="p-orange">—</p></div>
+  </div>
+
+  <div class="panel">
+    <h3>Players</h3>
+    <div class="players" id="players"></div>
+  </div>
+
+  <div class="panel" id="ctrl-panel">
+    <h3>Your actions <span style="font-size:12px;color:var(--color-text-tertiary);font-weight:400;">· 1 fruit per order, 10s cooldown per side</span></h3>
+    <div class="controls">
+      <div class="trade-box">
+        <h4>Buy 1 fruit (spend coins)</h4>
+        <div class="field"><label>item</label>
+          <select id="buy-item"><option value="apple">apple</option><option value="orange">orange</option></select>
+        </div>
+        <div class="field"><label>max ¢</label><input type="number" id="buy-price" value="2" min="1" step="0.5" /></div>
+        <button onclick="placeBuy()">Place buy order</button>
+        <div class="cooldown" id="buy-cd">ready</div>
+      </div>
+      <div class="trade-box">
+        <h4>Sell 1 fruit (gain coins)</h4>
+        <div class="field"><label>item</label>
+          <select id="sell-item"><option value="orange">orange</option><option value="apple">apple</option></select>
+        </div>
+        <div class="field"><label>min ¢</label><input type="number" id="sell-price" value="2" min="1" step="0.5" /></div>
+        <button onclick="placeSell()">Place sell order</button>
+        <div class="cooldown" id="sell-cd">ready</div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button onclick="toggleGame()" id="pp-btn">Pause</button>
+      <button onclick="resetGame()">Reset</button>
+      <button onclick="changeSpeed()" id="spd-btn">Speed: 1×</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Market log</h3>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const NAMES = ['Ava','Ben','Cleo','Dio','Eli','Fay','Gus','Hana','Ike','Jun'];
+  const COOLDOWN = 0;
+  const CONSUME_EVERY = 5;
+  let players, tick, running, speed, lastApple, lastOrange, log, pendingBuy, pendingSell, intervalId;
+
+  function init(){
+    players = NAMES.map((n,i)=>({
+      id: i,
+      name: n,
+      apples: i<5 ? 25 : 75,
+      oranges: i<5 ? 75 : 25,
+      coins: 20,
+      alive: true,
+      deathTick: null,
+      isYou: i===0,
+      buyCd: 0,
+      sellCd: 0,
+    }));
+    tick = 0; running = true; speed = 1;
+    lastApple = null; lastOrange = null;
+    log = [];
+    pendingBuy = null; pendingSell = null;
+    addLog('Game started. You are ' + NAMES[0] + ' (apple-heavy).', 'tick');
+    render();
+    startLoop();
+  }
+
+  function startLoop(){
+    if(intervalId) clearInterval(intervalId);
+    intervalId = setInterval(()=>{ if(running) step(); }, 1000/speed);
+  }
+
+  function addLog(msg, cls){
+    log.unshift({msg, cls: cls||''});
+    if(log.length>40) log.pop();
+  }
+
+  // ===== INTELLIGENT BOT AI =====
+  // Win condition: last player alive. You die when you can't consume 1 apple + 1 orange per cycle.
+  // Therefore RUNWAY = min(apples, oranges) is the only survival metric that matters.
+  // Coins are only valuable insofar as they can be converted back to runway.
+  //
+  // Strategy:
+  //  1. Identify weak fruit (the bottleneck) and strong fruit (surplus).
+  //  2. Never sell the weak fruit. Never sell if it would reduce runway.
+  //  3. Buy weak fruit urgently when runway is short; pay premium when desperate.
+  //  4. Sell strong fruit only when runway is safe; ask premium when runway is short.
+  //  5. Personal valuation is scarcity-weighted — the fruit I need is worth more to me
+  //     than the fruit I have a glut of. This makes trades profitable for BOTH sides
+  //     because bots with opposite needs assign opposite values.
+
+  function runway(p){ return Math.min(p.apples, p.oranges); }
+
+  function personalValue(p, item){
+    // What is one unit of `item` worth to this bot right now, in coins?
+    const base = item==='apple' ? (lastApple || 2) : (lastOrange || 2);
+    const myCount = item==='apple' ? p.apples : p.oranges;
+    const otherCount = item==='apple' ? p.oranges : p.apples;
+    const r = runway(p);
+
+    let mult;
+    if(myCount < otherCount){
+      // Bottleneck fruit — I need it to survive.
+      const gap = otherCount - myCount;
+      if(r <= 2)      mult = 4.0 + gap*0.08;
+      else if(r <= 5) mult = 2.5 + gap*0.04;
+      else if(r <= 10) mult = 1.6;
+      else if(r <= 20) mult = 1.25;
+      else             mult = 1.05;
+    } else {
+      // Surplus fruit — worth less to me personally.
+      if(r >= 25)      mult = 0.45;
+      else if(r >= 15) mult = 0.65;
+      else if(r >= 8)  mult = 0.8;
+      else             mult = 0.95;
+    }
+    return Math.max(0.5, base * mult);
+  }
+
+  function botDecide(p){
+    const r = runway(p);
+    const decisions = {};
+
+    const weakItem = p.apples < p.oranges ? 'apple' : 'orange';
+    const strongItem = weakItem === 'apple' ? 'orange' : 'apple';
+    const weakCount = Math.min(p.apples, p.oranges);
+    const strongCount = Math.max(p.apples, p.oranges);
+    const imbalance = strongCount - weakCount;
+
+    // --- BUY the weak fruit ---
+    if(p.buyCd<=0 && imbalance >= 1 && p.coins >= 1){
+      const myValue = personalValue(p, weakItem);
+      // Bid scales with urgency: desperate bots bid near full personal value.
+      let bidFrac;
+      if(r <= 1)       bidFrac = 0.98;
+      else if(r <= 3)  bidFrac = 0.90;
+      else if(r <= 6)  bidFrac = 0.80;
+      else if(r <= 12) bidFrac = 0.70;
+      else             bidFrac = 0.60;
+      let bid = myValue * bidFrac;
+      bid = Math.max(1, Math.min(p.coins, Math.round(bid*2)/2));
+      decisions.buy = { item: weakItem, price: bid };
+    }
+
+    // --- SELL the strong fruit ---
+    // Safety rule: after selling, runway must not decrease.
+    // i.e., strongCount - 1 >= weakCount, i.e., imbalance >= 1.
+    // We actually require imbalance >= 2 so we keep a buffer.
+    if(p.sellCd<=0 && imbalance >= 2){
+      const myValue = personalValue(p, strongItem);
+      // Ask scales inversely with runway safety.
+      let askMult;
+      if(r >= 25)      askMult = 1.05; // glut — accept near fair
+      else if(r >= 15) askMult = 1.20;
+      else if(r >= 8)  askMult = 1.40;
+      else if(r >= 4)  askMult = 1.80;
+      else             askMult = 2.50; // low runway: only sell to a desperate buyer
+      let ask = myValue * askMult;
+      ask = Math.max(1, Math.round(ask*2)/2);
+      decisions.sell = { item: strongItem, price: ask };
+    }
+
+    return decisions;
+  }
+
+  function matchTrade(seller, buyer, item, price){
+    if(item==='apple'){
+      if(seller.apples<1 || buyer.coins<price) return false;
+      seller.apples--; buyer.apples++;
+    } else {
+      if(seller.oranges<1 || buyer.coins<price) return false;
+      seller.oranges--; buyer.oranges++;
+    }
+    seller.coins += price;
+    buyer.coins -= price;
+    if(item==='apple') lastApple = price;
+    else lastOrange = price;
+    return true;
+  }
+
+  function runMarket(){
+    const sellers = []; const buyers = [];
+    players.forEach(p=>{
+      if(!p.alive || p.isYou) return;
+      const d = botDecide(p);
+          if(d.sell) { sellers.push({p, item: d.sell.item, price: d.sell.price }); p.sellCd = COOLDOWN; }
+          if(d.buy)  { buyers.push({p, item: d.buy.item,  price: d.buy.price });  p.buyCd = COOLDOWN; }
+    });
+    const you = players[0];
+    if(pendingBuy && you.alive && you.buyCd<=0){
+      buyers.push({p: you, item: pendingBuy.item, price: pendingBuy.price, isPlayer:true });
+    }
+    if(pendingSell && you.alive && you.sellCd<=0){
+      sellers.push({p: you, item: pendingSell.item, price: pendingSell.price, isPlayer:true });
+    }
+    ['apple','orange'].forEach(item=>{
+      const itemSellers = sellers.filter(s=>s.item===item).sort((a,b)=>a.price-b.price);
+      const itemBuyers  = buyers.filter(b=>b.item===item).sort((a,b)=>b.price-a.price);
+      let si=0, bi=0;
+      while(si<itemSellers.length && bi<itemBuyers.length){
+        const s = itemSellers[si], b = itemBuyers[bi];
+        if(s.p.id===b.p.id){ si++; continue; }
+        if(b.price >= s.price){
+          const price = Math.round(((s.price+b.price)/2)*2)/2;
+          const ok = matchTrade(s.p, b.p, item, price);
+          if(ok){
+            const cls = b.isPlayer ? 'buy' : (s.isPlayer ? 'sell' : '');
+            addLog(`t${tick}: ${s.p.name} → ${b.p.name} · ${item} @ ${price}¢`, cls);
+            if(s.isPlayer) pendingSell = null;
+            if(b.isPlayer) pendingBuy = null;
+            si++; bi++;
+          } else { si++; }
+        } else break;
+      }
+    });
+  }
+
+  function step(){
+    tick++;
+    players.forEach(p=>{
+      if(p.buyCd>0) p.buyCd--;
+      if(p.sellCd>0) p.sellCd--;
+    });
+    runMarket();
+    if (tick%CONSUME_EVERY==0){
+      players.forEach(p=>{
+        if(!p.alive) return;
+        if(p.apples>=1 && p.oranges>=1){
+          p.apples--; p.oranges--;
+        } else {
+          p.alive=false; p.deathTick=tick;
+          addLog(`t${tick}: ☠ ${p.name} starved (out of ${p.apples<1?'apples':'oranges'})`, 'die');
+        }
+      });
+    }
+    const aliveCount = players.filter(p=>p.alive).length;
+    if(aliveCount<=1){
+      running=false;
+      clearInterval(intervalId);
+    }
+    render();
+  }
+
+  function render(){
+    document.getElementById('time').textContent = tick + 's';
+    document.getElementById('alive').textContent = players.filter(p=>p.alive).length + ' / 10';
+    document.getElementById('p-apple').textContent = lastApple!=null ? lastApple + '¢' : '—';
+    document.getElementById('p-orange').textContent = lastOrange!=null ? lastOrange + '¢' : '—';
+
+    const plist = document.getElementById('players');
+    plist.innerHTML = players.map(p=>{
+      const cls = (p.isYou?'you ':'') + (!p.alive?'dead':'');
+      const badge = p.isYou ? '<span class="you-badge">you</span>' : (p.deathTick?`<span style="font-size:11px;color:#A32D2D;">t${p.deathTick}</span>`:'');
+      const r = runway(p);
+      return `<div class="p-card ${cls}">
+        <div class="pname">${p.name} ${badge}</div>
+        <div class="prow"><span>🍎 ${p.apples}</span><span>🍊 ${p.oranges}</span></div>
+        <div class="prow"><span>coins</span><span>${Math.round(p.coins)}¢</span></div>
+        <div class="runway">runway: ${r} cycles</div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('log').innerHTML = log.map(l=>`<div class="${l.cls}">${l.msg}</div>`).join('');
+
+    const you = players[0];
+    const buyCdEl = document.getElementById('buy-cd');
+    const sellCdEl = document.getElementById('sell-cd');
+if(buyCdEl){
+  let parts = [];
+  if(you.buyCd>0) parts.push(`cooldown: ${you.buyCd}s`);
+  if(pendingBuy) parts.push(`pending: ${pendingBuy.item} @ ≤${pendingBuy.price}¢`);
+  buyCdEl.textContent = parts.length ? parts.join(' · ') : 'ready';
+}
+if(sellCdEl){
+  let parts = [];
+  if(you.sellCd>0) parts.push(`cooldown: ${you.sellCd}s`);
+  if(pendingSell) parts.push(`pending: ${pendingSell.item} @ ≥${pendingSell.price}¢`);
+  sellCdEl.textContent = parts.length ? parts.join(' · ') : 'ready';
+}
+
+    const alive = players.filter(p=>p.alive);
+    if(!running && (alive.length<=1 || tick>0)){
+      const panel = document.getElementById('ctrl-panel');
+      if(!document.getElementById('go-banner') && (alive.length<=1)){
+        const div = document.createElement('div');
+        div.id='go-banner';
+        div.className='game-over';
+        const winner = alive[0] || players.slice().sort((a,b)=>b.deathTick-a.deathTick)[0];
+        const youResult = players[0].alive ? 'YOU SURVIVED! 🏆' : `You died at t${players[0].deathTick}`;
+        div.innerHTML = `<h2>${youResult}</h2><p>Last survivor: ${winner.name} (t${winner.deathTick||tick})</p>`;
+        panel.parentNode.insertBefore(div, panel);
+      }
+    }
+  }
+
+  window.placeBuy = function(){
+    const you = players[0];
+    if(you.buyCd>0){
+      addLog(`t${tick}: [you] buy on cooldown (${you.buyCd}s)`, 'tick');
+      render(); return;
+    }
+    const item = document.getElementById('buy-item').value;
+    const price = parseFloat(document.getElementById('buy-price').value)||1;
+    pendingBuy = {item, price};
+    you.buyCd = COOLDOWN;
+    addLog(`t${tick}: [you] buy order: 1 ${item} @ ≤${price}¢`, 'buy');
+    render();
+  };
+
+  window.placeSell = function(){
+    const you = players[0];
+    if(you.sellCd>0){
+      addLog(`t${tick}: [you] sell on cooldown (${you.sellCd}s)`, 'tick');
+      render(); return;
+    }
+    const item = document.getElementById('sell-item').value;
+    const price = parseFloat(document.getElementById('sell-price').value)||1;
+    pendingSell = {item, price};
+    you.sellCd = COOLDOWN;
+    addLog(`t${tick}: [you] sell order: 1 ${item} @ ≥${price}¢`, 'sell');
+    render();
+  };
+
+  window.toggleGame = function(){
+    running = !running;
+    document.getElementById('pp-btn').textContent = running?'Pause':'Resume';
+  };
+
+  window.resetGame = function(){
+    const b = document.getElementById('go-banner'); if(b) b.remove();
+    init();
+  };
+
+  window.changeSpeed = function(){
+    const speeds=[1,2,4,8];
+    speed = speeds[(speeds.indexOf(speed)+1)%speeds.length];
+    document.getElementById('spd-btn').textContent = 'Speed: '+speed+'×';
+    startLoop();
+  };
+
+  init();
+})();
+</script>
+</body>
+</html>
