@@ -86,6 +86,3 @@ debugging, and draft feedback. All modelling choices, parameter selection,
 and interpretation are the author's own. The full list of prompts used is
 provided in the appendix of the report.
 
-## License
-
-[MIT / or whatever you prefer]
